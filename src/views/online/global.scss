@@ -1,0 +1,16 @@
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+.online {
+  .warn-word {
+    background-color: #FAECD8;
+  }
+
+  .error-word {
+    background-color: #FDE2E2;
+  }
+}

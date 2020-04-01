@@ -1,7 +1,7 @@
 <template>
   <div class="create-record">
     <el-form ref="form" :model="form" :rules="rules" label-width="100px">
-      <el-form-item label="版本名" prop="versionName"><el-input v-model="form.versionName" :placeholder="placeholder.versionName" /></el-form-item>
+      <el-form-item label="版本名" prop="versionName"><el-input v-model="form.versionName" :placeholder="placeholder.versionName" maxlength="48" show-word-limit /></el-form-item>
       <el-form-item label="翻译语言" prop="translationLanguage"><el-input v-model="form.translationLanguage" :placeholder="placeholder.translationLanguage" /></el-form-item>
       <el-form-item label="备注" prop="remark"><el-input v-model="form.remark" type="textarea" :placeholder="placeholder.remark" /></el-form-item>
       <el-form-item>
@@ -61,6 +61,8 @@ export default {
     submitForm(formName) {
       this.$refs[formName].validate(valid => {
         if (valid) {
+          this.form.translationLanguage = this.form.translationLanguage.replace(/，/g, ',');
+
           if (this.$parent.$parent.addSucceed) this.$parent.$parent.addSucceed({ id: '新增记录唯一编码', files: [], updatedTime: '2020-02-25 00:00:00', ...this.form });
 
           if (this.closeFn) this.closeFn();

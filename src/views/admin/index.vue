@@ -3,7 +3,7 @@
     <!-- 工具栏 -->
     <div class="toolbar">
       <el-button type="primary" icon="el-icon-plus" @click="handleAdd">添加</el-button>
-      <el-input v-model="searchInput" class="search-input" placeholder="请输入版本名" prefix-icon="el-icon-search" />
+      <el-input v-model="searchInput" class="search-input" placeholder="请输入版本名" prefix-icon="el-icon-search" @change="handleSearch" />
     </div>
 
     <!-- 词条列表 -->
@@ -82,6 +82,7 @@
 <script>
 import { tableData } from './data.js';
 import { CreateLink, CreateRecord, ImportWord, UpdatedRecord } from './components';
+import { parseTime } from '@/utils/index.js';
 
 export default {
   name: 'Admin',
@@ -128,12 +129,17 @@ export default {
       if (data) this.tableData.unshift(data);
     },
 
+    // 搜索（触发）
+    handleSearch() {
+      console.log(`搜索关键字 ${this.searchInput}`);
+    },
+
     // 导入词条（触发）
     handleImport(index, row) {
       console.log(index, row);
       this.dialogTitle = '导入词条';
       this.dialogComponent = 'ImportWord';
-      this.fatherData = { index: index, ...row };
+      this.fatherData = { index, ...row };
       this.dialogVisible = true;
     },
 
@@ -145,9 +151,7 @@ export default {
         if (files && files.length > 0) {
           if (!this.tableData[index].files) this.tableData[index].files = [];
 
-          files.map(item => {
-            this.tableData[index].files.push(item);
-          });
+          this.tableData[index].files = this.tableData[index].files.concat(files);
         }
       }
     },
@@ -155,9 +159,24 @@ export default {
     // 编辑记录（触发）
     handleEdit(index, row) {
       console.log(index, row);
+      const { versionName, translationLanguage, remark } = row;
+
       this.dialogTitle = '编辑';
       this.dialogComponent = 'UpdatedRecord';
+      this.fatherData = { index, versionName, translationLanguage, remark };
       this.dialogVisible = true;
+    },
+
+    // 添加记录成功
+    editSucceed(data) {
+      if (data) {
+        const { index, versionName, translationLanguage, remark } = data;
+
+        this.tableData[index].versionName = versionName;
+        this.tableData[index].translationLanguage = translationLanguage;
+        this.tableData[index].updatedTime = parseTime(Date.now());
+        this.tableData[index].remark = remark;
+      }
     },
 
     // 设置词条（触发）
@@ -167,9 +186,9 @@ export default {
       const { href } = this.$router.resolve({
         path: '/online',
         query: {
-          id: id,
-          edit: '1',
-          translationLanguage: curTranslationLanguage
+          id: encodeURIComponent(id),
+          edit: encodeURIComponent('1'),
+          translationLanguage: encodeURIComponent(curTranslationLanguage)
         }
       });
       window.open(href, '_blank');
@@ -178,8 +197,11 @@ export default {
     // 生成链接（触发）
     handleLink(index, row) {
       console.log(index, row);
+      const { id, curTranslationLanguage } = row;
+
       this.dialogTitle = '生成链接';
       this.dialogComponent = 'CreateLink';
+      this.fatherData = { id, curTranslationLanguage };
       this.dialogVisible = true;
     },
 
@@ -195,11 +217,15 @@ export default {
 
     // 关闭弹窗前（触发）二次确认
     handleBeforeClose(done) {
-      this.$confirm('确认关闭？')
-        .then(_ => {
-          done();
-        })
-        .catch(_ => {});
+      if (this.dialogComponent === 'CreateLink') {
+        done();
+      } else {
+        this.$confirm('确认关闭？')
+          .then(_ => {
+            done();
+          })
+          .catch(_ => {});
+      }
     },
 
     // 手动关闭弹窗
@@ -220,10 +246,5 @@ export default {
 };
 </script>
 
-<style lang="scss">
-@import './my-element.scss';
-</style>
-
-<style lang="scss" scoped>
-@import './index.scss';
-</style>
+<style src="./global.scss" lang="scss"></style>
+<style src="./index.scss" lang="scss" scoped></style>

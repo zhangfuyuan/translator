@@ -10,9 +10,10 @@
     </el-upload>
 
     <ul class="preview">
-      <li v-for="item in fileList" :key="item.uid">
+      <li v-for="(item, index) in fileList" :key="item.uid || index">
         <span class="preview-name">{{ item.name }}</span>
         <el-input v-model="item.wordLanguage" class="preview-input" size="mini" placeholder="请输入词条语言" />
+        <i class="el-icon-close" @click="handleRemove(index)" />
       </li>
     </ul>
 
@@ -82,6 +83,11 @@ export default {
       }
     },
 
+    // 移除列表中的文件（触发）
+    handleRemove(index) {
+      this.fileList.splice(index, 1);
+    },
+
     // 上传文件（触发）
     handleUpload() {
       if (this.$parent.$parent.importSucceed) {
@@ -92,9 +98,9 @@ export default {
           const { fileName, wordLanguage } = item;
 
           files.push({
-            fileName: fileName,
+            fileName,
             fileLink: `词条文件名下载链接${Math.random()}`,
-            wordLanguage: wordLanguage
+            wordLanguage
           });
         });
 
@@ -109,6 +115,10 @@ export default {
 
 <style lang="scss" scoped>
 .import-word {
+  .preview {
+    padding: 0;
+  }
+
   .preview li {
     padding: 10px;
     display: flex;
@@ -116,7 +126,7 @@ export default {
     align-items: center;
 
     .preview-name {
-      max-width: 50%;
+      width: 50%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -124,6 +134,24 @@ export default {
 
     .preview-input {
       width: 30%;
+    }
+
+    .el-icon-close {
+      opacity: 0;
+      color: #f56c6c;
+      cursor: pointer;
+    }
+
+    &:hover {
+      background-color: #f5f7fa;
+
+      .preview-name {
+        color: #409eff;
+      }
+
+      .el-icon-close {
+        opacity: 1;
+      }
     }
   }
 
