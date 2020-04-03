@@ -1,11 +1,13 @@
 <template>
   <div class="create-link">
     <el-input ref="linkInput" v-model="input" class="link-input" readonly />
-    <el-button type="primary" @click="handleCopy">拷贝</el-button>
+    <el-button type="primary" @click="handleCopy">{{ $t('common.copy') }}</el-button>
   </div>
 </template>
 
 <script>
+import { ajaxCreateLink } from '@/api/admin';
+
 export default {
   name: 'CreateLink',
 
@@ -35,7 +37,23 @@ export default {
   created() {},
 
   mounted() {
-    this.input = encodeURI(`${window.location.href}?id=${this.transData.id}&curTranslationLanguage=${this.transData.curTranslationLanguage || ''}`);
+    const { id, translationLanguage } = this.transData;
+    console.log(id, translationLanguage);
+    let link = `${window.location.origin + '' + process.env.VUE_APP_PUBLIC_PATH}#/online?id=${encodeURIComponent(id)}`;
+    const ajaxOption = { id };
+
+    if (translationLanguage) {
+      link += `&translationLanguage=${encodeURIComponent(translationLanguage)}`;
+      ajaxOption.translationLanguage = encodeURIComponent(translationLanguage);
+    }
+
+    this.input = link;
+
+    ajaxCreateLink(ajaxOption).then(res => {
+      const { errcode, data } = res;
+
+      if (errcode === 0 && data) this.input = data;
+    });
   },
 
   destroyed() {},
@@ -51,7 +69,7 @@ export default {
       document.body.removeChild(_input); // 删除临时实例
       this.$message({
         showClose: true,
-        message: '拷贝成功',
+        message: this.$t('admin.copySuccess'),
         type: 'success'
       });
     }

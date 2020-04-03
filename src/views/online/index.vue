@@ -2,19 +2,33 @@
   <div class="online">
     <div class="header">
       <div class="saved-time">
-        最近保存时间：
+        {{ $t('online.lastSavedTime') }}
         <span>{{ savedTime }}</span>
       </div>
 
       <div class="toolbar">
-        <el-button size="small" type="success">导出XML</el-button>
-        <el-button size="small">导出Excel</el-button>
-        <el-button size="small">导入Excel</el-button>
-        <el-button ref="saveBtn" size="small" type="primary" :disabled="!isChange" @click="handleSave">保存</el-button>
+        <a ref="download" href="" target="_blank" />
+        <el-button size="small" :disabled="!hotInstance" type="success" @click="handleExportXML">{{ $t('online.exportXML') }}</el-button>
+        <el-button size="small" :disabled="!hotInstance" @click="handleExportExcel">{{ $t('online.exportExcel') }}</el-button>
+        <el-button size="small" :disabled="!hotInstance" @click="handleImportExcel">{{ $t('online.importExcel') }}</el-button>
+        <el-button ref="saveBtn" size="small" type="primary" :disabled="isSaved" @click="handleSave">{{ $t('common.save') }}</el-button>
       </div>
     </div>
 
     <div class="main"><hot-table ref="hotTable" class="my-table" :settings="settings" :language="language" license-key="non-commercial-and-evaluation" /></div>
+
+    <!-- 弹窗 -->
+    <el-dialog
+      :title="dialogTitle"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :visible.sync="dialogVisible"
+      :before-close="handleBeforeClose"
+      width="50%"
+      @close="handleClose"
+    >
+      <component :is="dialogComponent" :trans-id="submitData.id" />
+    </el-dialog>
   </div>
 </template>
 
@@ -22,13 +36,14 @@
 import { HotTable } from '@handsontable/vue';
 import Handsontable from 'handsontable';
 import 'handsontable/languages/zh-CN';
-import { getWordDetail } from '@/api/__test';
-import { parseTime } from '@/utils/index.js';
+// import { parseTime } from '@/utils/index.js';
+import { getWordDetail, ajaxSaveWordDetail, ajaxExportXML, ajaxExportExcel /*, ajaxImportExcel*/ } from '@/api/online';
+import { ImportExcel } from './components';
 
 export default {
   name: 'Online',
 
-  components: { HotTable },
+  components: { HotTable, ImportExcel },
 
   mixins: [],
 
@@ -61,7 +76,12 @@ export default {
       hotInstance: null,
       isKeydownCtrlS: false,
       errorWordList: [],
-      isChange: false
+      isSaved: true,
+      msgInstance: null,
+      fatherDialogVisible: false,
+      dialogTitle: '',
+      dialogComponent: '',
+      dialogVisible: false
     };
   },
 
@@ -81,8 +101,8 @@ export default {
       const { id, edit, translationLanguage } = query;
 
       this.submitData.id = decodeURIComponent(id);
-      this.submitData.edit = decodeURIComponent(edit);
-      this.submitData.translationLanguage = decodeURIComponent(translationLanguage);
+      if (edit) this.submitData.edit = edit + '';
+      if (translationLanguage) this.submitData.translationLanguage = decodeURIComponent(translationLanguage);
     }
 
     this.initHotTable();
@@ -98,7 +118,6 @@ export default {
   methods: {
     // 初始化Excel表格
     initHotTable() {
-      console.time('初始化表格用时');
       const { id, edit, translationLanguage } = this.submitData;
 
       getWordDetail({ id, edit, translationLanguage }).then(res => {
@@ -115,7 +134,8 @@ export default {
             const firstWord = word[firstWordLangKeys];
             const otherWordLangKeys = wordLangKeys.slice(1);
             const hasOtherWordLang = (otherWordLangKeys && otherWordLangKeys.length > 0) || false;
-            const isEdit = edit === '1' || edit === 1;
+            const isEdit = edit === '1';
+            const warnWordList = [];
 
             data = Object.keys(firstWord).map((key, index) => {
               let wordVal = firstWord[key];
@@ -146,11 +166,19 @@ export default {
               if (index === 0) columns.push({ readOnly: true }); // 显示长度限制列只读
 
               this.wordKeyMap[index] = key;
+              const validType = transcript[key].length > strLimit ? (isLimit ? 'error' : 'warn') : 'valid';
+
+              if (validType === 'error') {
+                this.errorWordList.push(`${index},${wordLangLen}`);
+              } else if (validType === 'warn') {
+                warnWordList.push(`${index},${wordLangLen}`);
+              }
+
               return row;
             });
 
-            if (isEdit) colHeaders = colHeaders.concat(['设置长度限制', '长度限制']);
-            else colHeaders.push('长度限制');
+            if (isEdit) colHeaders = colHeaders.concat([this.$t('online.setLengthLimit'), this.$t('online.lengthLimit')]);
+            else colHeaders.push(this.$t('online.lengthLimit'));
 
             this.settings.columns = columns;
             this.settings.colHeaders = colHeaders;
@@ -165,7 +193,32 @@ export default {
 
             this.$nextTick(_ => {
               this.settings.data = data;
-              console.timeEnd('初始化表格用时');
+
+              this.$nextTick(_ => {
+                let needRender = false;
+
+                if (this.errorWordList.length > 0) {
+                  needRender = true;
+
+                  this.errorWordList.forEach(item => {
+                    const [row, col] = item.split(',');
+
+                    this.hotInstance.setCellMeta(row, col, 'className', (this.hotInstance.getCellMeta(row, col).className || '') + ' error-word');
+                  });
+                }
+
+                if (warnWordList.length > 0) {
+                  needRender = true;
+
+                  warnWordList.forEach(item => {
+                    const [row, col] = item.split(',');
+
+                    this.hotInstance.setCellMeta(row, col, 'className', (this.hotInstance.getCellMeta(row, col).className || '') + ' warn-word');
+                  });
+                }
+
+                if (needRender) this.hotInstance.render();
+              });
             });
           }
         }
@@ -174,35 +227,31 @@ export default {
 
     // 修改Excel单元格前（触发）
     handleBeforeKeyDown(e) {
-      const isCtrlKey = navigator.platform.match('Mac') ? e.metaKey : e.ctrlKey;
-
-      if (!isCtrlKey) this.isChange = true;
+      this.isSaved = false;
     },
 
     // 修改Excel单元格后（触发）
     handleAfterChange(changes) {
-      console.time('修改单元格处理用时');
       if (changes) {
-        let needRender = false;
         let isChange = false;
         const invalidClassReg = new RegExp('(\\s|^)(warn-word|error-word)(\\s|$)');
         const errorClassReg = new RegExp('(\\s|^)error-word(\\s|$)');
         const { transcript, limit } = this.submitData;
+        const transcriptColIndex = this.transcriptColIndex;
 
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (oldValue !== newValue) {
             isChange = true;
             const key = this.wordKeyMap[row];
             const data = this.settings.data[row];
-            const transcriptColIndex = this.transcriptColIndex;
-            const className = this.hotInstance.getCellMeta(row, this.transcriptColIndex).className || '';
+            const className = this.hotInstance.getCellMeta(row, transcriptColIndex).className || '';
             const rowCol = `${row},${transcriptColIndex}`;
             let newValueLen = '';
 
             if (col === transcriptColIndex) {
               // 修改了翻译列的单元格
-              transcript[key] = newValue;
-              newValueLen = newValue.length;
+              transcript[key] = newValue || '';
+              newValueLen = (newValue && newValue.length) || 0;
             }
 
             if (col === this.limitColIndex) {
@@ -213,40 +262,33 @@ export default {
               if (newValueNum + '' !== newValue + '') data[col] = newValueNum2;
 
               limit[key] = newValueNum2;
-              data[data.length - 1] = newValueNum2;
-              newValueLen = data[transcriptColIndex].length;
+              data[data.length - 1] = newValueNum2 <= -1 ? data[0].length : newValueNum2;
+              newValueLen = (data[transcriptColIndex] && data[transcriptColIndex].length) || 0;
             }
 
             const validType = newValueLen > parseInt(data[data.length - 1]) ? (limit[key] > -1 ? 'error' : 'warn') : 'valid';
             const classType = className && className.match(invalidClassReg) ? (className.match(errorClassReg) ? 'error' : 'warn') : 'valid';
             const errorWordListIndex = this.errorWordList.indexOf(rowCol);
 
-            console.log(className, validType, classType, errorWordListIndex);
-
             if (validType === 'error') {
               if (classType === 'warn') {
                 this.hotInstance.setCellMeta(row, transcriptColIndex, 'className', className.replace(invalidClassReg, 'error-word'));
-                needRender = true;
-              } else {
+              } else if (classType !== 'error') {
                 this.hotInstance.setCellMeta(row, transcriptColIndex, 'className', className + ' error-word');
-                needRender = true;
               }
 
               if (errorWordListIndex === -1) this.errorWordList.push(rowCol);
             } else if (validType === 'warn') {
               if (classType === 'error') {
                 this.hotInstance.setCellMeta(row, transcriptColIndex, 'className', className.replace(invalidClassReg, 'warn-word'));
-                needRender = true;
               } else if (classType !== 'warn') {
                 this.hotInstance.setCellMeta(row, transcriptColIndex, 'className', className + ' warn-word');
-                needRender = true;
               }
 
               if (errorWordListIndex > -1) this.errorWordList.splice(errorWordListIndex, 1);
             } else {
               if (classType === 'error' || classType === 'warn') {
                 this.hotInstance.setCellMeta(row, transcriptColIndex, 'className', className.replace(invalidClassReg, ' '));
-                needRender = true;
               }
 
               if (errorWordListIndex > -1) this.errorWordList.splice(errorWordListIndex, 1);
@@ -254,27 +296,28 @@ export default {
           }
         });
 
-        if (needRender) this.hotInstance.render();
-
         if (isChange) {
+          this.isSaved = false;
           this.saveSumbit(this.isKeydownCtrlS);
-          this.isKeydownCtrlS = false;
+          this.hotInstance.render();
         }
       }
-      this.isChange = false;
-      console.timeEnd('修改单元格处理用时');
     },
 
     // 保存数据（触发）
     handleSave() {
-      const { transcript, limit } = this.submitData;
+      const { edit, transcript, limit } = this.submitData;
 
       Object.keys(this.wordKeyMap).map(row => {
         const key = this.wordKeyMap[row];
         const data = this.settings.data[row];
 
-        transcript[key] = data[this.transcriptColIndex];
-        limit[key] = parseInt(data[this.limitColIndex]);
+        transcript[key] = data[this.transcriptColIndex] || '';
+
+        if (edit === '1') {
+          const curLimit = parseInt(data[this.limitColIndex]);
+          limit[key] = isNaN(curLimit) ? -1 : curLimit;
+        }
       });
 
       this.saveSumbit(true);
@@ -296,6 +339,8 @@ export default {
 
             this.isKeydownCtrlS = true;
             this.hotInstance.selectCell(endRow + 1, endCol, endRow + 1, endCol);
+            this.$refs['saveBtn'].$el.click();
+            this.isKeydownCtrlS = false;
           }
         }
       }
@@ -305,26 +350,106 @@ export default {
     saveSumbit(isShowMsg) {
       if (this.errorWordList.length === 0) {
         const { id, edit, transcript, limit } = this.submitData;
-        console.log('Sumbit : ', { id, edit, transcript: JSON.stringify(transcript), limit: JSON.stringify(limit) });
 
-        setTimeout(_ => {
-          this.savedTime = parseTime(Date.now(), '{h}:{i}:{s}');
+        ajaxSaveWordDetail({ id, edit, transcript: JSON.stringify(transcript), limit: JSON.stringify(limit) }).then(res => {
+          const { errcode, data } = res;
 
-          if (isShowMsg) {
-            this.$message({
+          if (errcode === 0 && data) {
+            this.savedTime = data;
+
+            if (isShowMsg) {
+              this.isSaved = true;
+              if (this.msgInstance) this.msgInstance.close();
+              this.msgInstance = this.$message({
+                showClose: true,
+                message: this.$t('online.saveSuccess'),
+                type: 'success'
+              });
+            }
+          } else if (isShowMsg) {
+            if (this.msgInstance) this.msgInstance.close();
+            this.msgInstance = this.$message({
               showClose: true,
-              message: '保存成功',
-              type: 'success'
+              message: this.$t('common.failedOperation'),
+              type: 'error'
             });
           }
-        }, 500);
+        });
       } else if (isShowMsg) {
-        this.$message({
+        if (this.msgInstance) this.msgInstance.close();
+        this.msgInstance = this.$message({
           showClose: true,
-          message: '保存失败，部分翻译词条长度超出限制',
+          message: this.$t('online.saveFailedTips'),
           type: 'error'
         });
       }
+    },
+
+    // 导出XML（触发）
+    handleExportXML() {
+      ajaxExportXML({ id: this.submitData.id }).then(res => {
+        const { errcode, data } = res;
+
+        if (errcode === 0 && data) {
+          this.$refs['download'].href = data;
+          this.$refs['download'].click();
+        }
+      });
+    },
+
+    // 导出Excel（触发）
+    handleExportExcel() {
+      ajaxExportExcel({ id: this.submitData.id }).then(res => {
+        const { errcode, data } = res;
+
+        if (errcode === 0 && data) {
+          this.$refs['download'].href = data;
+          this.$refs['download'].click();
+        }
+      });
+    },
+
+    // 导入Excel（触发）
+    handleImportExcel() {
+      this.dialogTitle = this.$t('online.importExcel');
+      this.dialogComponent = 'ImportExcel';
+      this.dialogVisible = true;
+    },
+
+    // 导入Excel成功
+    importExcelSucceed() {
+      this.closeDialog();
+      this.$message({
+        showClose: true,
+        message: this.$t('common.operateSuccessfully'),
+        type: 'success'
+      });
+
+      setTimeout(_ => {
+        window.location.reload();
+      }, 1000);
+    },
+
+    // 关闭弹窗前（触发）二次确认
+    handleBeforeClose(done) {
+      this.$confirm(this.$t('common.confirmClose'))
+        .then(_ => {
+          done();
+        })
+        .catch(_ => {});
+    },
+
+    // 手动关闭弹窗
+    closeDialog() {
+      this.$nextTick(_ => {
+        this.dialogVisible = false;
+      });
+    },
+
+    // 关闭弹窗后（触发）
+    handleClose() {
+      this.dialogTitle = '';
+      this.dialogComponent = '';
     }
   }
 };

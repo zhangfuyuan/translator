@@ -8,14 +8,20 @@
     align-items: center;
     margin-bottom: 20px;
 
-    .search-input {
-      width: 30%;
+    .search {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+
+      .search-date,
+      .search-input {
+        margin-right: 2%;
+        width: 46%;
+      }
     }
   }
 
   .list {
-    margin-bottom: 20px;
-
     .more-dropdown {
       margin-left: 5px;
     }

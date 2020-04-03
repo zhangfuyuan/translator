@@ -2,66 +2,68 @@
   <div class="admin">
     <!-- 工具栏 -->
     <div class="toolbar">
-      <el-button type="primary" icon="el-icon-plus" @click="handleAdd">添加</el-button>
-      <el-input v-model="searchInput" class="search-input" placeholder="请输入版本名" prefix-icon="el-icon-search" @change="handleSearch" />
+      <el-button type="primary" icon="el-icon-plus" @click="handleAdd">{{ $t('common.add') }}</el-button>
+
+      <div class="search">
+        <el-date-picker
+          v-model="tableQuery.searchDate"
+          class="search-date"
+          type="daterange"
+          unlink-panels
+          :start-placeholder="$t('common.startDate')"
+          range-separator="~"
+          :end-placeholder="$t('common.endDate')"
+          value-format="yyyy-MM-dd"
+          :picker-options="pickerOptions"
+        />
+        <el-input v-model="tableQuery.searchKey" class="search-input" maxlength="48" :placeholder="$t('admin.enterVersionName')" />
+        <el-button class="search-button" type="primary" icon="el-icon-search" :disabled="tableLoading" @click="handleSearch">{{ $t('common.search') }}</el-button>
+      </div>
     </div>
 
     <!-- 词条列表 -->
     <div class="list">
-      <el-table v-loading="tableLoading" :data="tableData" fit stripe border style="width: 100%">
+      <el-table v-loading="tableLoading" v-tabelLoadmore="tableLoadMore" :data="tableData" :height="tableHeight" fit stripe border style="width: 100%">
         <el-table-column prop="id" label="ID" />
-        <el-table-column prop="versionName" label="版本名" />
-        <el-table-column label="词条文件">
+        <el-table-column prop="versionName" :label="$t('admin.versionName')" />
+        <el-table-column :label="$t('admin.wordFile')">
           <template slot-scope="scope">
             <template v-if="scope.row.files && scope.row.files.length > 0">
-              <div v-for="item in scope.row.files" :key="item.fileLink">
+              <div v-for="(item, index) in scope.row.files" :key="index">
                 <el-link type="primary" icon="el-icon-download" :href="item.fileLink" target="_blank">{{ item.fileName }}</el-link>
                 <span style="margin-left: 5px">({{ item.wordLanguage }})</span>
               </div>
             </template>
           </template>
         </el-table-column>
-        <el-table-column label="翻译语言">
+        <el-table-column :label="$t('admin.tbotChange')">
           <template slot-scope="scope">
             <template v-if="scope.row.translationLanguage && scope.row.translationLanguage.split(',')">
-              <el-select v-model="scope.row.curTranslationLanguage" placeholder="请选择语言" size="mini">
-                <el-option v-for="item in scope.row.translationLanguage.split(',')" :key="item" :label="item" :value="item" />
+              <el-select v-model="scope.row.curTranslationLanguage" :placeholder="$t('admin.selectLanguage')" size="mini">
+                <el-option v-for="(item, index) in scope.row.translationLanguage.split(',')" :key="index" :label="item" :value="item" />
               </el-select>
             </template>
           </template>
         </el-table-column>
-        <el-table-column prop="updatedTime" label="更新时间" width="160" />
-        <el-table-column prop="remark" label="备注" width="100" />
-        <el-table-column label="操作">
+        <el-table-column prop="updatedTime" :label="$t('admin.updatedTime')" width="160" />
+        <el-table-column prop="remark" :label="$t('admin.remark')" width="100" />
+        <el-table-column :label="$t('admin.handle')">
           <template slot-scope="scope">
-            <el-button size="mini" type="primary" @click="handleImport(scope.$index, scope.row)">导入词条</el-button>
+            <el-button size="mini" type="success" @click="handleImport(scope.$index, scope.row)">{{ $t('admin.importWord') }}</el-button>
             <el-dropdown>
               <el-button size="mini" plain class="more-dropdown">
-                更多
+                {{ $t('common.more') }}
                 <i class="el-icon-arrow-down el-icon--right" />
               </el-button>
               <el-dropdown-menu slot="dropdown">
-                <el-dropdown-item @click.native="handleEdit(scope.$index, scope.row)">编辑</el-dropdown-item>
-                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleSet(scope.$index, scope.row)">设置词条</el-dropdown-item>
-                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleLink(scope.$index, scope.row)">生成链接</el-dropdown-item>
+                <el-dropdown-item @click.native="handleEdit(scope.$index, scope.row)">{{ $t('common.edit') }}</el-dropdown-item>
+                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleSet(scope.$index, scope.row)">{{ $t('admin.setWord') }}</el-dropdown-item>
+                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleLink(scope.$index, scope.row)">{{ $t('admin.createLink') }}</el-dropdown-item>
               </el-dropdown-menu>
             </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
-    </div>
-
-    <!-- 分页器 -->
-    <div class="pagination">
-      <el-pagination
-        layout="total, sizes, prev, pager, next, jumper"
-        :current-page="currentPage"
-        :page-sizes="[10, 20, 50, 100]"
-        :page-size="10"
-        :total="400"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
     </div>
 
     <!-- 弹窗 -->
@@ -74,15 +76,15 @@
       width="50%"
       @close="handleClose"
     >
-      <component :is="dialogComponent" v-model="fatherData" :trans-data="fatherData" :close-fn="closeDialog" />
+      <component :is="dialogComponent" :trans-data="fatherData" />
     </el-dialog>
   </div>
 </template>
 
 <script>
-import { tableData } from './data.js';
 import { CreateLink, CreateRecord, ImportWord, UpdatedRecord } from './components';
 import { parseTime } from '@/utils/index.js';
+import { getRecordList } from '@/api/admin';
 
 export default {
   name: 'Admin',
@@ -95,14 +97,51 @@ export default {
 
   data() {
     return {
-      searchInput: '', // 搜索关键字
-      currentPage: 1, // 当前页码
-      tableData, // 表格数据
-      tableLoading: false, // 表格是否正在加载数据
+      pickerOptions: {
+        shortcuts: [
+          {
+            text: this.$t('common.lastWeek'),
+            onClick(picker) {
+              const end = new Date();
+              const start = new Date();
+              start.setTime(start.getTime() - 3600 * 1000 * 24 * 7);
+              picker.$emit('pick', [start, end]);
+            }
+          },
+          {
+            text: this.$t('common.lastMonth'),
+            onClick(picker) {
+              const end = new Date();
+              const start = new Date();
+              start.setTime(start.getTime() - 3600 * 1000 * 24 * 30);
+              picker.$emit('pick', [start, end]);
+            }
+          },
+          {
+            text: this.$t('common.last3Month'),
+            onClick(picker) {
+              const end = new Date();
+              const start = new Date();
+              start.setTime(start.getTime() - 3600 * 1000 * 24 * 90);
+              picker.$emit('pick', [start, end]);
+            }
+          }
+        ]
+      },
+      tableData: [], // 表格数据
+      tableLoading: true, // 表格是否正在加载数据
       dialogVisible: false, // 弹窗是否显示
       dialogComponent: '', // 弹窗子组件
       dialogTitle: '', // 弹窗标题
-      fatherData: null // 用于父子组件双向传递数据
+      fatherData: null, // 用于父子组件双向传递数据
+      tableHeight: document.documentElement.clientHeight - 100,
+      tableQuery: {
+        searchKey: '',
+        pageNo: 1,
+        pageSize: 20,
+        searchDate: ''
+      },
+      tableScrollBottom: false
     };
   },
 
@@ -112,34 +151,92 @@ export default {
 
   created() {},
 
-  mounted() {},
+  mounted() {
+    this.getTableData();
+  },
 
   destroyed() {},
 
   methods: {
+    // 加载表格数据
+    getTableData(isReset) {
+      const { searchKey, pageNo, pageSize, searchDate } = this.tableQuery;
+
+      getRecordList({
+        searchKey,
+        pageNo: pageNo + '',
+        pageSize: pageSize + '',
+        beginDate: searchDate && searchDate[0],
+        endDate: searchDate && searchDate[1]
+      })
+        .then(res => {
+          const { errcode, data } = res;
+
+          if (errcode === 0 && data) {
+            if (isReset) this.tableData = data;
+            else this.tableData.push(...data);
+
+            if (data.length === 0) {
+              this.tableScrollBottom = true;
+              this.$message({
+                showClose: true,
+                message: this.$t('admin.allDataLoaded'),
+                type: 'info'
+              });
+            }
+          } else {
+            this.$message({
+              showClose: true,
+              message: this.$t('common.failedOperation'),
+              type: 'error'
+            });
+          }
+
+          this.tableLoading = false;
+        })
+        .catch(_ => (this.tableLoading = false));
+    },
+
+    // 滚动懒加载
+    tableLoadMore() {
+      if (!this.tableLoading && !this.tableScrollBottom) {
+        this.tableLoading = true;
+        this.tableQuery.pageNo++;
+        this.getTableData();
+      }
+    },
+
+    // 搜索（触发）
+    handleSearch() {
+      this.tableScrollBottom = false;
+      this.tableLoading = true;
+      this.tableQuery.pageNo = 1;
+      this.tableData = [];
+      this.getTableData(true);
+    },
+
     // 添加记录（触发）
     handleAdd() {
-      this.dialogTitle = '添加';
+      this.dialogTitle = this.$t('common.add');
       this.dialogComponent = 'CreateRecord';
       this.dialogVisible = true;
     },
 
     // 添加记录成功
     addSucceed(data) {
-      if (data) this.tableData.unshift(data);
-    },
-
-    // 搜索（触发）
-    handleSearch() {
-      console.log(`搜索关键字 ${this.searchInput}`);
+      if (data) {
+        this.tableData.unshift(data);
+        this.closeDialog();
+      }
     },
 
     // 导入词条（触发）
     handleImport(index, row) {
-      console.log(index, row);
-      this.dialogTitle = '导入词条';
+      const { id } = row;
+
+      this.dialogTitle = this.$t('admin.importWord');
       this.dialogComponent = 'ImportWord';
-      this.fatherData = { index, ...row };
+      this.fatherData = { index, id };
       this.dialogVisible = true;
     },
 
@@ -151,68 +248,60 @@ export default {
         if (files && files.length > 0) {
           if (!this.tableData[index].files) this.tableData[index].files = [];
 
-          this.tableData[index].files = this.tableData[index].files.concat(files);
+          this.tableData[index].files.push(...files);
         }
+
+        this.closeDialog();
+        this.$message({
+          showClose: true,
+          message: this.$t('common.operateSuccessfully'),
+          type: 'success'
+        });
       }
     },
 
     // 编辑记录（触发）
     handleEdit(index, row) {
-      console.log(index, row);
-      const { versionName, translationLanguage, remark } = row;
+      const { id, versionName, translationLanguage, remark } = row;
 
-      this.dialogTitle = '编辑';
+      this.dialogTitle = this.$t('common.edit');
       this.dialogComponent = 'UpdatedRecord';
-      this.fatherData = { index, versionName, translationLanguage, remark };
+      this.fatherData = { index, id, versionName, translationLanguage, remark };
       this.dialogVisible = true;
     },
 
-    // 添加记录成功
+    // 编辑记录成功
     editSucceed(data) {
       if (data) {
-        const { index, versionName, translationLanguage, remark } = data;
+        const { index, versionName, translationLanguage, updatedTime, remark } = data;
 
         this.tableData[index].versionName = versionName;
         this.tableData[index].translationLanguage = translationLanguage;
-        this.tableData[index].updatedTime = parseTime(Date.now());
+        this.tableData[index].updatedTime = updatedTime || parseTime(Date.now());
         this.tableData[index].remark = remark;
+        this.closeDialog();
       }
     },
 
     // 设置词条（触发）
     handleSet(index, row) {
-      console.log(index, row);
       const { id, curTranslationLanguage } = row;
-      const { href } = this.$router.resolve({
-        path: '/online',
-        query: {
-          id: encodeURIComponent(id),
-          edit: encodeURIComponent('1'),
-          translationLanguage: encodeURIComponent(curTranslationLanguage)
-        }
-      });
+      const query = { id: encodeURIComponent(id), edit: '1' };
+
+      if (curTranslationLanguage) query.translationLanguage = encodeURIComponent(curTranslationLanguage);
+
+      const { href } = this.$router.resolve({ path: '/online', query });
       window.open(href, '_blank');
     },
 
     // 生成链接（触发）
     handleLink(index, row) {
-      console.log(index, row);
       const { id, curTranslationLanguage } = row;
 
-      this.dialogTitle = '生成链接';
+      this.dialogTitle = this.$t('admin.createLink');
       this.dialogComponent = 'CreateLink';
-      this.fatherData = { id, curTranslationLanguage };
+      this.fatherData = { id, translationLanguage: curTranslationLanguage };
       this.dialogVisible = true;
-    },
-
-    // 改变表格每页显示数量（触发）
-    handleSizeChange(val) {
-      console.log(`每页 ${val} 条`);
-    },
-
-    // 改变表格当前页码（触发）
-    handleCurrentChange(val) {
-      console.log(`当前页: ${val}`);
     },
 
     // 关闭弹窗前（触发）二次确认
@@ -220,7 +309,7 @@ export default {
       if (this.dialogComponent === 'CreateLink') {
         done();
       } else {
-        this.$confirm('确认关闭？')
+        this.$confirm(this.$t('common.confirmClose'))
           .then(_ => {
             done();
           })
@@ -237,7 +326,6 @@ export default {
 
     // 关闭弹窗后（触发）
     handleClose() {
-      console.log(`关闭了`);
       this.dialogTitle = '';
       this.dialogComponent = '';
       this.fatherData = null;

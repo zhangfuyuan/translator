@@ -7,10 +7,22 @@ body,
 
 .online {
   .warn-word {
-    background-color: #FAECD8;
+    background-color: #faecd8;
   }
 
   .error-word {
-    background-color: #FDE2E2;
+    background-color: #fde2e2;
+  }
+
+  .el-upload {
+    display: block;
+
+    .el-upload-dragger {
+      width: 100%;
+    }
+  }
+
+  .el-upload__tip {
+    text-align: center;
   }
 }

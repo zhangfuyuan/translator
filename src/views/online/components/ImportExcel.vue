@@ -1,51 +1,29 @@
 <template>
-  <div v-loading="uploadLoading" class="import-word">
-    <el-upload
-      ref="upload"
-      class="upload-demo"
-      action=""
-      drag
-      :file-list="fileList"
-      accept=".xml,.properties"
-      :auto-upload="false"
-      :show-file-list="false"
-      :on-change="handleChange"
-    >
+  <div v-loading="uploadLoading" class="import-excel">
+    <el-upload ref="upload" class="upload-demo" action="" drag :file-list="fileList" accept=".xls,.xlsx" :auto-upload="false" :show-file-list="false" :on-change="handleChange">
       <i class="el-icon-upload" />
       <div class="el-upload__text">
         {{ $t('admin.importWordTips1') }}
         <em>{{ $t('admin.importWordTips2') }}</em>
       </div>
-      <div slot="tip" class="el-upload__tip">{{ $t('admin.importWordTips3', { type: 'xml,properties' }) }}</div>
+      <div slot="tip" class="el-upload__tip">{{ $t('admin.importWordTips3', { type: 'xls,xlsx' }) }}</div>
     </el-upload>
-
-    <ul class="preview">
-      <li v-for="(item, index) in fileList" :key="item.uid || index">
-        <span class="preview-name">{{ item.name }}</span>
-        <el-input v-model="item.wordLanguage" class="preview-input" size="mini" :placeholder="$t('admin.wordLanguagePlaceholder')" />
-        <i class="el-icon-close" @click="handleRemove(index)" />
-      </li>
-    </ul>
-
-    <div class="upload">
-      <el-button size="small" type="success" :disabled="fileList.length === 0" @click="handleUpload">{{ $t('admin.uploadServer') }}</el-button>
-    </div>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'ImportWord',
+  name: 'ImportExcel',
 
   components: {},
 
   mixins: [],
 
   props: {
-    transData: {
-      type: Object,
+    transId: {
+      type: String,
       default() {
-        return null;
+        return '';
       }
     }
   },
@@ -54,24 +32,13 @@ export default {
     return {
       fileList: [],
       uploader: null,
-      uploadLoading: false,
-      uploadCompleteNum: 0
-      // subData: null
+      uploadLoading: false
     };
   },
 
   computed: {},
 
-  watch: {
-    // transData(val) {
-    //   console.log('父影响子', val);
-    //   this.subData = val;
-    // },
-    // subData(val) {
-    //   console.log('子影响父', val);
-    //   this.$emit('input', val);
-    // }
-  },
+  watch: {},
 
   created() {},
 
@@ -82,43 +49,14 @@ export default {
   methods: {
     // 更新文件列表（触发）
     handleChange(file, fileList) {
-      if (this.transData) {
-        const { id } = this.transData;
-        const { name } = file;
-
-        file.recordId = id;
-        file.fileName = name;
+      if (this.transId) {
+        file.recordId = this.transId;
         this.fileList = fileList.slice(0);
-      }
-    },
 
-    // 移除列表中的文件（触发）
-    handleRemove(index) {
-      this.fileList.splice(index, 1);
-    },
-
-    // 上传文件（触发）
-    handleUpload() {
-      if (this.fileList.length > 0 && !this.uploadLoading && window.WebUploader) {
-        this.uploadLoading = true;
-        this.wuInit();
-      }
-    },
-
-    // 判断是否全部文件上传完成
-    verdictUploadComplete() {
-      if (this.uploadCompleteNum >= this.fileList.length && this.$parent.$parent.importSucceed) {
-        const { index } = this.transData;
-        const files = [];
-
-        this.fileList.forEach(item => {
-          const { fileName, fileLink, wordLanguage } = item;
-
-          files.push({ fileName, fileLink, wordLanguage });
-        });
-
-        this.uploadLoading = false;
-        this.$parent.$parent.importSucceed({ index, files });
+        if (this.fileList.length > 0 && !this.uploadLoading && window.WebUploader) {
+          this.uploadLoading = true;
+          this.wuInit();
+        }
       }
     },
 
@@ -128,7 +66,7 @@ export default {
 
       this.uploader = window.WebUploader.create({
         swf: process.env.VUE_APP_PUBLIC_PATH + 'lib/webuploader/Uploader.swf', // 请根据实际项目部署路径配置swf文件路径
-        server: process.env.VUE_APP_BASE_API + '/importWord', // 文件接收服务端
+        server: process.env.VUE_APP_BASE_API + '/importExcel', // 文件接收服务端
         // server: 'http://192.168.14.201:11000/commServer/resource/upload', // 文件接收服务端
         thumb: false, // 不生成缩略图
         compress: false, // 如果此选项为false, 则图片在上传前不进行压缩
@@ -137,13 +75,11 @@ export default {
       });
 
       this.fileList.forEach((item, index) => {
-        const { recordId, raw, wordLanguage } = item;
+        const { recordId, raw } = item;
         let wuFile = new window.WebUploader.Lib.File(window.WebUploader.guid('rt_'), raw);
         let newfile = new window.WebUploader.File(wuFile);
 
         newfile.recordId = recordId;
-        newfile.wordLanguage = wordLanguage;
-        newfile.index = index;
         this.uploader.addFiles(newfile);
         wuFile = null;
         newfile = null;
@@ -161,7 +97,6 @@ export default {
       this.uploader.on('uploadBeforeSend', (block, data) => {
         data.md5 = block.file.md5;
         data.recordId = block.file.recordId;
-        data.wordLanguage = block.file.wordLanguage;
       });
 
       // this.uploader.on('uploadProgress', (file, percentage) => {});
@@ -180,10 +115,10 @@ export default {
       this.uploader.on('uploadSuccess', (file, response) => {
         const { errcode, data } = response;
 
-        if (errcode === 0 && data && data.fileLink) {
-          this.fileList[file.index].fileLink = data.fileLink;
-          this.uploadCompleteNum++;
-          this.verdictUploadComplete();
+        if (errcode === 0 && data === 'success') {
+          this.uploadLoading = false;
+
+          if (this.$parent.$parent.importExcelSucceed) this.$parent.$parent.importExcelSucceed();
         } else if (errcode === 0 && data === 'upload_chunk') {
           // 分片文件上传成功时返回，啥也不做
         }
@@ -217,7 +152,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.import-word {
+.import-excel {
   .preview {
     padding: 0;
   }
