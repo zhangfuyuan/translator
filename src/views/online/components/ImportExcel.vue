@@ -20,10 +20,10 @@ export default {
   mixins: [],
 
   props: {
-    transId: {
-      type: String,
+    transData: {
+      type: Object,
       default() {
-        return '';
+        return null;
       }
     }
   },
@@ -49,8 +49,11 @@ export default {
   methods: {
     // 更新文件列表（触发）
     handleChange(file, fileList) {
-      if (this.transId) {
-        file.recordId = this.transId;
+      if (this.transData) {
+        const { id, translationLanguage } = this.transData;
+
+        file.recordId = id;
+        file.translationLanguage = translationLanguage;
         this.fileList = fileList.slice(0);
 
         if (this.fileList.length > 0 && !this.uploadLoading && window.WebUploader) {
@@ -66,7 +69,7 @@ export default {
 
       this.uploader = window.WebUploader.create({
         swf: process.env.VUE_APP_PUBLIC_PATH + 'lib/webuploader/Uploader.swf', // 请根据实际项目部署路径配置swf文件路径
-        server: process.env.VUE_APP_BASE_API + '/importExcel', // 文件接收服务端
+        server: process.env.VUE_APP_BASE_API + '/entry/importExcel', // 文件接收服务端
         // server: 'http://192.168.14.201:11000/commServer/resource/upload', // 文件接收服务端
         thumb: false, // 不生成缩略图
         compress: false, // 如果此选项为false, 则图片在上传前不进行压缩
@@ -75,11 +78,12 @@ export default {
       });
 
       this.fileList.forEach((item, index) => {
-        const { recordId, raw } = item;
+        const { recordId, raw, translationLanguage } = item;
         let wuFile = new window.WebUploader.Lib.File(window.WebUploader.guid('rt_'), raw);
         let newfile = new window.WebUploader.File(wuFile);
 
         newfile.recordId = recordId;
+        newfile.translationLanguage = translationLanguage;
         this.uploader.addFiles(newfile);
         wuFile = null;
         newfile = null;
@@ -97,6 +101,8 @@ export default {
       this.uploader.on('uploadBeforeSend', (block, data) => {
         data.md5 = block.file.md5;
         data.recordId = block.file.recordId;
+        data.translationLanguage = block.file.translationLanguage;
+        data.fileType = '3';
       });
 
       // this.uploader.on('uploadProgress', (file, percentage) => {});
@@ -113,14 +119,21 @@ export default {
       });
 
       this.uploader.on('uploadSuccess', (file, response) => {
-        const { errcode, data } = response;
+        const { errcode, data, msg } = response;
 
-        if (errcode === 0 && data === 'success') {
+        if (errcode === 0) {
           this.uploadLoading = false;
 
           if (this.$parent.$parent.importExcelSucceed) this.$parent.$parent.importExcelSucceed();
         } else if (errcode === 0 && data === 'upload_chunk') {
           // 分片文件上传成功时返回，啥也不做
+        } else if (msg && /false/i.test(msg)) {
+          this.uploadLoading = false;
+          this.$message({
+            showClose: true,
+            message: this.$t('common.failedOperation'),
+            type: 'error'
+          });
         }
       });
 

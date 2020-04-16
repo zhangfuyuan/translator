@@ -28,12 +28,14 @@
     </ul>
 
     <div class="upload">
-      <el-button size="small" type="success" :disabled="fileList.length === 0" @click="handleUpload">{{ $t('admin.uploadServer') }}</el-button>
+      <el-button size="small" type="success" :disabled="fileList.length === 0 || !transData" @click="handleUpload">{{ $t('admin.uploadServer') }}</el-button>
     </div>
   </div>
 </template>
 
 <script>
+import { ajaxXmlToEntry } from '@/api/admin';
+
 export default {
   name: 'ImportWord',
 
@@ -99,8 +101,11 @@ export default {
 
     // 上传文件（触发）
     handleUpload() {
-      if (this.fileList.length > 0 && !this.uploadLoading && window.WebUploader) {
+      const { id } = this.transData;
+
+      if (this.fileList.length > 0 && !this.uploadLoading && window.WebUploader && id) {
         this.uploadLoading = true;
+        this.uploadCompleteNum = 0;
         this.wuInit();
       }
     },
@@ -108,18 +113,73 @@ export default {
     // 判断是否全部文件上传完成
     verdictUploadComplete() {
       if (this.uploadCompleteNum >= this.fileList.length && this.$parent.$parent.importSucceed) {
-        const { index } = this.transData;
+        const { index, id } = this.transData;
         const files = [];
+        const wordLanguageList = [];
 
         this.fileList.forEach(item => {
           const { fileName, fileLink, wordLanguage } = item;
 
           files.push({ fileName, fileLink, wordLanguage });
+          wordLanguageList.push(wordLanguage);
         });
 
-        this.uploadLoading = false;
-        this.$parent.$parent.importSucceed({ index, files });
+        this.pollingXmlToEntry(id, wordLanguageList)
+          .then(() => {
+            this.uploadLoading = false;
+            this.$parent.$parent.importSucceed({ index, files });
+          })
+          .catch(() => {
+            this.uploadLoading = false;
+            this.$message({
+              showClose: true,
+              message: this.$t('common.failedOperation'),
+              type: 'error'
+            });
+          });
       }
+    },
+
+    // 轮询导入的词条文件转换
+    pollingXmlToEntry(id, wordLanguageList) {
+      return new Promise((resolve, reject) => {
+        if (id && wordLanguageList.length > 0) {
+          ajaxXmlToEntry({
+            id,
+            wordLanguage: wordLanguageList[0]
+          })
+            .then(res => {
+              const { errcode } = res;
+
+              if (errcode === 0) {
+                if (wordLanguageList.length > 1) {
+                  wordLanguageList.shift();
+                  this.pollingXmlToEntry(id, wordLanguageList)
+                    .then(() => resolve())
+                    .catch(() => reject());
+                } else {
+                  resolve();
+                }
+              } else if (errcode === 10003) {
+                setTimeout(() => {
+                  this.pollingXmlToEntry(id, wordLanguageList)
+                    .then(() => resolve())
+                    .catch(() => reject());
+                }, 10000);
+              } else {
+                reject();
+              }
+            })
+            .catch(() => {
+              // 超时开始轮询
+              this.pollingXmlToEntry(id, wordLanguageList)
+                .then(() => resolve())
+                .catch(() => reject());
+            });
+        } else {
+          reject();
+        }
+      });
     },
 
     // 初始化 WebUploader 实例对象
@@ -128,7 +188,7 @@ export default {
 
       this.uploader = window.WebUploader.create({
         swf: process.env.VUE_APP_PUBLIC_PATH + 'lib/webuploader/Uploader.swf', // 请根据实际项目部署路径配置swf文件路径
-        server: process.env.VUE_APP_BASE_API + '/importWord', // 文件接收服务端
+        server: process.env.VUE_APP_BASE_API + '/dictionary/importWord', // 文件接收服务端
         // server: 'http://192.168.14.201:11000/commServer/resource/upload', // 文件接收服务端
         thumb: false, // 不生成缩略图
         compress: false, // 如果此选项为false, 则图片在上传前不进行压缩
@@ -162,6 +222,7 @@ export default {
         data.md5 = block.file.md5;
         data.recordId = block.file.recordId;
         data.wordLanguage = block.file.wordLanguage;
+        data.fileType = '1';
       });
 
       // this.uploader.on('uploadProgress', (file, percentage) => {});
@@ -178,7 +239,7 @@ export default {
       });
 
       this.uploader.on('uploadSuccess', (file, response) => {
-        const { errcode, data } = response;
+        const { errcode, data, msg } = response;
 
         if (errcode === 0 && data && data.fileLink) {
           this.fileList[file.index].fileLink = data.fileLink;
@@ -186,6 +247,13 @@ export default {
           this.verdictUploadComplete();
         } else if (errcode === 0 && data === 'upload_chunk') {
           // 分片文件上传成功时返回，啥也不做
+        } else if (msg && /false/i.test(msg)) {
+          this.uploadLoading = false;
+          this.$message({
+            showClose: true,
+            message: this.$t('common.failedOperation'),
+            type: 'error'
+          });
         }
       });
 

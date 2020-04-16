@@ -16,7 +16,7 @@
           value-format="yyyy-MM-dd"
           :picker-options="pickerOptions"
         />
-        <el-input v-model="tableQuery.searchKey" class="search-input" maxlength="48" :placeholder="$t('admin.enterVersionName')" />
+        <el-input v-model="tableQuery.searchKey" class="search-input" maxlength="48" :placeholder="$t('admin.enterVersionName')" @keyup.enter.native="handleSearch" />
         <el-button class="search-button" type="primary" icon="el-icon-search" :disabled="tableLoading" @click="handleSearch">{{ $t('common.search') }}</el-button>
       </div>
     </div>
@@ -30,7 +30,7 @@
           <template slot-scope="scope">
             <template v-if="scope.row.files && scope.row.files.length > 0">
               <div v-for="(item, index) in scope.row.files" :key="index">
-                <el-link type="primary" icon="el-icon-download" :href="item.fileLink" target="_blank">{{ item.fileName }}</el-link>
+                <el-link type="primary" icon="el-icon-download" :href="item.fileLink" target="_blank" :download="item.fileName">{{ item.fileName }}</el-link>
                 <span style="margin-left: 5px">({{ item.wordLanguage }})</span>
               </div>
             </template>
@@ -38,10 +38,13 @@
         </el-table-column>
         <el-table-column :label="$t('admin.tbotChange')">
           <template slot-scope="scope">
-            <template v-if="scope.row.translationLanguage && scope.row.translationLanguage.split(',')">
+            <template v-if="scope.row.translationLanguage">
               <el-select v-model="scope.row.curTranslationLanguage" :placeholder="$t('admin.selectLanguage')" size="mini">
                 <el-option v-for="(item, index) in scope.row.translationLanguage.split(',')" :key="index" :label="item" :value="item" />
               </el-select>
+            </template>
+            <template v-else>
+              <span class="translation-language-null">{{ $t('admin.translationLanguageNullTips') }}</span>
             </template>
           </template>
         </el-table-column>
@@ -57,8 +60,12 @@
               </el-button>
               <el-dropdown-menu slot="dropdown">
                 <el-dropdown-item @click.native="handleEdit(scope.$index, scope.row)">{{ $t('common.edit') }}</el-dropdown-item>
-                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleSet(scope.$index, scope.row)">{{ $t('admin.setWord') }}</el-dropdown-item>
-                <el-dropdown-item :disabled="!scope.row.files.length" @click.native="handleLink(scope.$index, scope.row)">{{ $t('admin.createLink') }}</el-dropdown-item>
+                <el-dropdown-item :disabled="!scope.row.files.length || !scope.row.curTranslationLanguage" @click.native="handleSet(scope.$index, scope.row)">
+                  {{ $t('admin.setWord') }}
+                </el-dropdown-item>
+                <el-dropdown-item :disabled="!scope.row.files.length || !scope.row.curTranslationLanguage" @click.native="handleLink(scope.$index, scope.row)">
+                  {{ $t('admin.createLink') }}
+                </el-dropdown-item>
               </el-dropdown-menu>
             </el-dropdown>
           </template>
@@ -82,14 +89,14 @@
 </template>
 
 <script>
-import { CreateLink, CreateRecord, ImportWord, UpdatedRecord } from './components';
-import { parseTime } from '@/utils/index.js';
+import { CreateLink, CreateRecord, ImportWord, SetWord, UpdatedRecord } from './components';
+// import { parseTime } from '@/utils/index.js';
 import { getRecordList } from '@/api/admin';
 
 export default {
   name: 'Admin',
 
-  components: { CreateLink, CreateRecord, ImportWord, UpdatedRecord },
+  components: { CreateLink, CreateRecord, ImportWord, SetWord, UpdatedRecord },
 
   mixins: [],
 
@@ -163,7 +170,7 @@ export default {
       const { searchKey, pageNo, pageSize, searchDate } = this.tableQuery;
 
       getRecordList({
-        searchKey,
+        searchKey: searchKey.trim(),
         pageNo: pageNo + '',
         pageSize: pageSize + '',
         beginDate: searchDate && searchDate[0],
@@ -277,7 +284,7 @@ export default {
 
         this.tableData[index].versionName = versionName;
         this.tableData[index].translationLanguage = translationLanguage;
-        this.tableData[index].updatedTime = updatedTime || parseTime(Date.now());
+        this.tableData[index].updatedTime = updatedTime;
         this.tableData[index].remark = remark;
         this.closeDialog();
       }
@@ -285,28 +292,29 @@ export default {
 
     // 设置词条（触发）
     handleSet(index, row) {
-      const { id, curTranslationLanguage } = row;
-      const query = { id: encodeURIComponent(id), edit: '1' };
+      const { id, files, curTranslationLanguage } = row;
+      const wordLanguageList = files.map(item => item.wordLanguage);
 
-      if (curTranslationLanguage) query.translationLanguage = encodeURIComponent(curTranslationLanguage);
-
-      const { href } = this.$router.resolve({ path: '/online', query });
-      window.open(href, '_blank');
+      this.dialogTitle = this.$t('admin.setWord');
+      this.dialogComponent = 'SetWord';
+      this.fatherData = { id, wordLanguageList: [...new Set(wordLanguageList)], translationLanguage: curTranslationLanguage };
+      this.dialogVisible = true;
     },
 
     // 生成链接（触发）
     handleLink(index, row) {
-      const { id, curTranslationLanguage } = row;
+      const { id, files, curTranslationLanguage } = row;
+      const wordLanguageList = files.map(item => item.wordLanguage);
 
       this.dialogTitle = this.$t('admin.createLink');
       this.dialogComponent = 'CreateLink';
-      this.fatherData = { id, translationLanguage: curTranslationLanguage };
+      this.fatherData = { id, wordLanguageList: [...new Set(wordLanguageList)], translationLanguage: curTranslationLanguage };
       this.dialogVisible = true;
     },
 
     // 关闭弹窗前（触发）二次确认
     handleBeforeClose(done) {
-      if (this.dialogComponent === 'CreateLink') {
+      if (this.dialogComponent === 'CreateLink' || this.dialogComponent === 'SetWord') {
         done();
       } else {
         this.$confirm(this.$t('common.confirmClose'))

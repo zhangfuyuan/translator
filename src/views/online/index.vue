@@ -27,7 +27,7 @@
       width="50%"
       @close="handleClose"
     >
-      <component :is="dialogComponent" :trans-id="submitData.id" />
+      <component :is="dialogComponent" :trans-data="fatherData" />
     </el-dialog>
   </div>
 </template>
@@ -37,7 +37,7 @@ import { HotTable } from '@handsontable/vue';
 import Handsontable from 'handsontable';
 import 'handsontable/languages/zh-CN';
 // import { parseTime } from '@/utils/index.js';
-import { getWordDetail, ajaxSaveWordDetail, ajaxExportXML, ajaxExportExcel /*, ajaxImportExcel*/ } from '@/api/online';
+import { getWordDetail, ajaxSaveWordDetail, ajaxExportXML /*, ajaxExportExcel , ajaxImportExcel*/ } from '@/api/online';
 import { ImportExcel } from './components';
 
 export default {
@@ -65,6 +65,7 @@ export default {
       submitData: {
         id: '',
         edit: '',
+        contrast: '',
         translationLanguage: '',
         transcript: {},
         limit: {}
@@ -81,7 +82,8 @@ export default {
       fatherDialogVisible: false,
       dialogTitle: '',
       dialogComponent: '',
-      dialogVisible: false
+      dialogVisible: false,
+      fatherData: null
     };
   },
 
@@ -98,10 +100,11 @@ export default {
     if (this.$i18n.locale === 'zh') this.language = 'zh-CN';
 
     if (query) {
-      const { id, edit, translationLanguage } = query;
+      const { id, edit, contrast, translationLanguage } = query;
 
       this.submitData.id = decodeURIComponent(id);
       if (edit) this.submitData.edit = edit + '';
+      if (contrast) this.submitData.contrast = decodeURIComponent(contrast);
       if (translationLanguage) this.submitData.translationLanguage = decodeURIComponent(translationLanguage);
     }
 
@@ -118,9 +121,9 @@ export default {
   methods: {
     // 初始化Excel表格
     initHotTable() {
-      const { id, edit, translationLanguage } = this.submitData;
+      const { id, edit, contrast, translationLanguage } = this.submitData;
 
-      getWordDetail({ id, edit, translationLanguage }).then(res => {
+      getWordDetail({ id, edit, contrast, translationLanguage }).then(res => {
         if (res.errcode === 0 && res.data) {
           const { edit, translationLanguage, word, transcript, limit } = res.data;
           const wordLangKeys = (word && Object.keys(word)) || null;
@@ -146,6 +149,7 @@ export default {
 
               if (hasOtherWordLang) {
                 otherWordLangKeys.map(lang => {
+                  if (!word[lang][key]) word[lang][key] = '';
                   wordVal = word[lang][key];
                   row.push(wordVal); // 多语言词条列
                   if (index === 0) columns.push({ readOnly: true }); // 多语言词条列只读
@@ -154,10 +158,12 @@ export default {
                 });
               }
 
+              if (!transcript[key]) transcript[key] = '';
               row.push(transcript[key]); // 翻译列
               if (index === 0) columns.push({}); // 翻译列可写
 
               if (isEdit) {
+                if (!limit[key]) limit[key] = -1;
                 row.push(limit[key]); // 设置长度限制列
                 if (index === 0) columns.push({}); // 设置长度限制列可写
               }
@@ -238,6 +244,10 @@ export default {
         const errorClassReg = new RegExp('(\\s|^)error-word(\\s|$)');
         const { transcript, limit } = this.submitData;
         const transcriptColIndex = this.transcriptColIndex;
+        const _sumbitData = {
+          transcript: {},
+          limit: {}
+        };
 
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (oldValue !== newValue) {
@@ -293,12 +303,15 @@ export default {
 
               if (errorWordListIndex > -1) this.errorWordList.splice(errorWordListIndex, 1);
             }
+
+            _sumbitData.transcript[key] = data[transcriptColIndex];
+            _sumbitData.limit[key] = parseInt(data[this.limitColIndex]);
           }
         });
 
         if (isChange) {
           this.isSaved = false;
-          this.saveSumbit(this.isKeydownCtrlS);
+          this.saveSumbit(this.isKeydownCtrlS, _sumbitData);
           this.hotInstance.render();
         }
       }
@@ -347,15 +360,24 @@ export default {
     },
 
     // 保存的数据校验及提交
-    saveSumbit(isShowMsg) {
+    saveSumbit(isShowMsg, partialData) {
       if (this.errorWordList.length === 0) {
-        const { id, edit, transcript, limit } = this.submitData;
+        const { id, edit, translationLanguage, transcript, limit } = this.submitData;
+        const _submitData = {
+          id,
+          edit,
+          translationLanguage,
+          transcript: JSON.stringify(isShowMsg ? transcript : (partialData && partialData.transcript) || {}),
+          limit: JSON.stringify(isShowMsg ? limit : (partialData && partialData.limit) || {})
+        };
 
-        ajaxSaveWordDetail({ id, edit, transcript: JSON.stringify(transcript), limit: JSON.stringify(limit) }).then(res => {
+        if (isShowMsg) _submitData.isComplete = '1';
+
+        ajaxSaveWordDetail(_submitData).then(res => {
           const { errcode, data } = res;
 
           if (errcode === 0 && data) {
-            this.savedTime = data;
+            this.savedTime = data.updateTime;
 
             if (isShowMsg) {
               this.isSaved = true;
@@ -385,13 +407,15 @@ export default {
       }
     },
 
-    // 导出XML（触发）
+    // 导出词条（触发）
     handleExportXML() {
-      ajaxExportXML({ id: this.submitData.id }).then(res => {
+      const { id, translationLanguage } = this.submitData;
+
+      ajaxExportXML({ id, fileType: '2', translationLanguage }).then(res => {
         const { errcode, data } = res;
 
         if (errcode === 0 && data) {
-          this.$refs['download'].href = data;
+          this.$refs['download'].href = data.href;
           this.$refs['download'].click();
         }
       });
@@ -399,20 +423,19 @@ export default {
 
     // 导出Excel（触发）
     handleExportExcel() {
-      ajaxExportExcel({ id: this.submitData.id }).then(res => {
-        const { errcode, data } = res;
+      const { id, contrast, translationLanguage } = this.submitData;
 
-        if (errcode === 0 && data) {
-          this.$refs['download'].href = data;
-          this.$refs['download'].click();
-        }
-      });
+      this.$refs['download'].href = `${process.env.VUE_APP_BASE_API}/entry/exportExcel?id=${id}&fileType=4&contrast=${contrast}&translationLanguage=${translationLanguage}`;
+      this.$refs['download'].click();
     },
 
     // 导入Excel（触发）
     handleImportExcel() {
+      const { id, translationLanguage } = this.submitData;
+
       this.dialogTitle = this.$t('online.importExcel');
       this.dialogComponent = 'ImportExcel';
+      this.fatherData = { id, translationLanguage };
       this.dialogVisible = true;
     },
 
@@ -425,9 +448,9 @@ export default {
         type: 'success'
       });
 
-      setTimeout(_ => {
+      setTimeout(() => {
         window.location.reload();
-      }, 1000);
+      }, 2500);
     },
 
     // 关闭弹窗前（触发）二次确认
@@ -450,6 +473,7 @@ export default {
     handleClose() {
       this.dialogTitle = '';
       this.dialogComponent = '';
+      this.fatherData = null;
     }
   }
 };

@@ -21,6 +21,8 @@ export default {
     save: '保存',
     failedOperation: '操作失败',
     operateSuccessfully: '操作成功',
+    checkAll: '全选',
+    confirm: '确定',
   },
   page: {
     home: '首页',
@@ -41,7 +43,7 @@ export default {
     setWord: '设置词条',
     createLink: '生成链接',
     copySuccess: '拷贝成功',
-    versionNamePlaceholder: '请输入版本名（必填），推荐格式："应用名_版本号"，建议所有的版本名均唯一',
+    versionNamePlaceholder: '请输入版本名（必填），推荐格式："应用名_版本号"，版本名需唯一',
     translationLanguagePlaceholder: '请输入翻译语言（选填），多个请用","隔开',
     remarkPlaceholder: '请输入备注（选填）',
     versionNameRequired: '版本名必填',
@@ -52,6 +54,9 @@ export default {
     wordLanguagePlaceholder: '请输入词条语言',
     uploadServer: '上传到服务器',
     allDataLoaded: '全部数据已加载完成',
+    versionNameRepeat: '版本名重复',
+    translationLanguageNullTips: '请通过 "更多 > 编辑" 添加翻译语言',
+    contrastLanguage: '对照语言',
   },
   online: {
     lastSavedTime: '最近保存时间：',

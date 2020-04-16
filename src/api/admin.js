@@ -11,7 +11,7 @@ endDate    非必要  字符串  结束时间，格式"2020-04-01"
  * */
 export function getRecordList(option) {
   return request({
-    url: '/recordList',
+    url: '/dictionary/recordList',
     method: 'get',
     params: option
   })
@@ -26,7 +26,7 @@ remark               非必要  字符串  备注
  * */
 export function ajaxCreateRecord(option) {
   return request({
-    url: '/createRecord',
+    url: '/dictionary/createRecord',
     method: 'post',
     data: option
   })
@@ -42,10 +42,11 @@ name          必要    字符串  文件名，分片附带
 size          必要    数字    文件大小，分片附带
 md5           必要    字符串  校验码，分片附带
 wordLanguage  非必要  字符串  词条语言，分片附带
+fileType      必要    字符串  '1'，定值
  * */
 export function ajaxImportWord(option) {
   return request({
-    url: '/importWord',
+    url: '/dictionary/importWord',
     method: 'post',
     data: option
   })
@@ -61,7 +62,7 @@ remark               非必要  字符串  备注
  * */
 export function ajaxUpdatedRecord(option) {
   return request({
-    url: '/updatedRecord',
+    url: '/dictionary/updatedRecord',
     method: 'post',
     data: option
   })
@@ -71,11 +72,21 @@ export function ajaxUpdatedRecord(option) {
 五、管理后台——生成链接
 提交：
 id                   必要    字符串  唯一编码
-translationLanguage  非必要  字符串  翻译语言
+href                 必要    字符串  访问地址
+contrast             必要    字符串  对照的语言
+translationLanguage  必要    字符串  翻译语言
  * */
 export function ajaxCreateLink(option) {
   return request({
-    url: '/createLink',
+    url: '/dictionary/createLink',
+    method: 'get',
+    params: option
+  })
+}
+
+export function ajaxXmlToEntry(option) {
+  return request({
+    url: '/dictionary/xmlToEntry',
     method: 'get',
     params: option
   })

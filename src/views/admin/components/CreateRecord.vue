@@ -70,6 +70,12 @@ export default {
 
             if (errcode === 0 && data) {
               if (this.$parent.$parent.addSucceed) this.$parent.$parent.addSucceed(data);
+            } else if (errcode === 10001) {
+              this.$message({
+                showClose: true,
+                message: this.$t('admin.versionNameRepeat'),
+                type: 'error'
+              });
             } else {
               this.$message({
                 showClose: true,

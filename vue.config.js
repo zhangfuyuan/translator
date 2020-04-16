@@ -31,24 +31,24 @@ module.exports = {
   productionSourceMap: false,
   devServer: {
     port: port,
-    host: '127.0.0.1',
+    host: '192.168.14.153',
     open: true,
     overlay: {
       warnings: false,
       errors: true
     },
-    before: require('./mock/mock-server.js')
-    // proxy: {
-    //   '/api': {
-    //     // target: 'https://tcc.taobao.com/cc/json',
-    //     target: 'https://www.kuaidi100.com',
-    //     ws: true,
-    //     changeOrigin: true,
-    //     pathRewrite: {
-    //       '^/api': ''
-    //     }
-    //   }
-    // }
+    // before: require('./mock/mock-server.js')
+    proxy: {
+      '/api': {
+        // target: 'https://tcc.taobao.com/cc/json',
+        target: 'http://192.168.14.53:8081/entryServer',
+        ws: true,
+        changeOrigin: true,
+        pathRewrite: {
+          '^/api': ''
+        }
+      }
+    }
   },
   configureWebpack: {
     // provide the app's title in webpack's name field, so that

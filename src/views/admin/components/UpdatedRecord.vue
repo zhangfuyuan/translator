@@ -80,7 +80,13 @@ export default {
             const { errcode, data } = res;
 
             if (errcode === 0 && data) {
-              if (this.$parent.$parent.editSucceed) this.$parent.$parent.editSucceed({ index: this.transData.index, ...this.form, updatedTime: data });
+              if (this.$parent.$parent.editSucceed) this.$parent.$parent.editSucceed({ index: this.transData.index, ...this.form, updatedTime: data.updateTime });
+            } else if (errcode === 10001) {
+              this.$message({
+                showClose: true,
+                message: this.$t('admin.versionNameRepeat'),
+                type: 'error'
+              });
             } else {
               this.$message({
                 showClose: true,

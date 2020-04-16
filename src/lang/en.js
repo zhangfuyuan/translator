@@ -21,6 +21,8 @@ export default {
     save: 'Save',
     failedOperation: 'Failed operation',
     operateSuccessfully: 'Operate successfully',
+    checkAll: 'Check all',
+    confirm: 'Confirm',
   },
   page: {
     home: 'Home',
@@ -41,7 +43,7 @@ export default {
     setWord: 'Set word',
     createLink: 'Create link',
     copySuccess: 'Copy success',
-    versionNamePlaceholder: 'Please enter the version name (required), the recommended format: "application name _ version number", it is recommended that all version names are unique',
+    versionNamePlaceholder: 'Please enter the version name (required), the recommended format: "applicationName_versionNumber", and the version name needs to be unique',
     translationLanguagePlaceholder: 'Please enter the translation language (optional), please separate the multiple with ","',
     remarkPlaceholder: 'Please enter remarks (optional)',
     versionNameRequired: 'Version name required',
@@ -52,6 +54,9 @@ export default {
     wordLanguagePlaceholder: 'Please enter the word language',
     uploadServer: 'Upload to server',
     allDataLoaded: 'All data has been loaded',
+    versionNameRepeat: 'Duplicate version name',
+    translationLanguageNullTips: 'Please add a translation language with "More > Edit"',
+    contrastLanguage: ' the contrasting language',
   },
   online: {
     lastSavedTime: 'Last saved time :',
